@@ -28,8 +28,8 @@ Implemented using the **Strategy Pattern**:
 ---
 
 ## Multithreading Model
-- each **Server** runs on its own thread :contentReference[oaicite:0]{index=0}
-- a central **SimulationManager** controls the simulation lifecycle :contentReference[oaicite:1]{index=1}
+- each **Server** runs on its own thread
+- a central **SimulationManager** controls the simulation lifecycle
 - a separate **simulation thread** runs the time-based simulation loop
 - thread-safe structures:
   - `BlockingQueue<Task>` for queues
