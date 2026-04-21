@@ -9,12 +9,10 @@ public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             SerializationManagement serializationManager = new SerializationManagement("tasks_data.ser");
-
             TasksManagement taskManager = serializationManager.loadData();
+            taskManager.setSerializationManagement(serializationManager);
             Utility utility = new Utility();
-
-            MainFrame mainFrame = new MainFrame(taskManager, utility, serializationManager);
-
+            MainFrame mainFrame = new MainFrame(taskManager, utility);
             mainFrame.setVisible(true);
         });
     }

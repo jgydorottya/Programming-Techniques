@@ -11,11 +11,10 @@ public class SerializationManagement {
         this.filePath = filePath;
     }
 
-    public void saveData(TasksManagement taskManager) throws FileNotFoundException {
+    public void saveData(TasksManagement taskManager) {
         if (taskManager == null) {
             throw new IllegalArgumentException("Task manager cannot be null.");
         }
-
         try (ObjectOutputStream objectOutputStream = new ObjectOutputStream(new FileOutputStream(filePath))) {
             objectOutputStream.writeObject(taskManager);
         } catch (IOException e) {

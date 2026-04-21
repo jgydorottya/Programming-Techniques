@@ -2,23 +2,24 @@ package presentation;
 
 import business.TasksManagement;
 import business.Utility;
-import data.SerializationManagement;
+import model.ComplexTask;
+import model.Task;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.List;
+import java.util.Map;
 
 public class MainFrame extends JFrame {
     private final TasksManagement taskManager;
     private final Utility utility;
-    private final SerializationManagement serializationManager;
 
     private JComboBox<model.Employee> employeeCombo;
     private JComboBox<model.Task> taskCombo;
 
-    public MainFrame(TasksManagement taskManager, Utility utility, SerializationManagement serializationManager) {
+    public MainFrame(TasksManagement taskManager, Utility utility) {
         this.taskManager = taskManager;
         this.utility = utility;
-        this.serializationManager = serializationManager;
 
         initializeFrame();
         initializeComponents();
@@ -27,15 +28,16 @@ public class MainFrame extends JFrame {
     private void initializeFrame() {
         setTitle("Task Management Application");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 600);
+        setSize(950, 650);
         setLocationRelativeTo(null);
     }
 
     private void initializeComponents() {
         JTabbedPane tabbedPane = new JTabbedPane();
-        JPanel assignmentPanel = createAssignmentPanel();
+
         JPanel employeesPanel = createEmployeesPanel();
         JPanel tasksPanel = createTasksPanel();
+        JPanel assignmentPanel = createAssignmentPanel();
         JPanel statisticsPanel = createStatisticsPanel();
 
         tabbedPane.addTab("Employees", employeesPanel);
@@ -49,7 +51,6 @@ public class MainFrame extends JFrame {
     private JPanel createEmployeesPanel() {
         JPanel panel = new JPanel(new BorderLayout());
 
-        // Top: input form
         JPanel formPanel = new JPanel(new GridLayout(3, 2, 10, 10));
 
         JLabel idLabel = new JLabel("Employee ID:");
@@ -64,15 +65,13 @@ public class MainFrame extends JFrame {
         formPanel.add(idField);
         formPanel.add(nameLabel);
         formPanel.add(nameField);
-        formPanel.add(new JLabel()); // empty cell
+        formPanel.add(new JLabel());
         formPanel.add(addButton);
 
-        // Center: display area
         JTextArea displayArea = new JTextArea();
         displayArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(displayArea);
 
-        // Button logic
         addButton.addActionListener(e -> {
             try {
                 int id = Integer.parseInt(idField.getText().trim());
@@ -82,17 +81,11 @@ public class MainFrame extends JFrame {
                     throw new IllegalArgumentException("Name cannot be empty.");
                 }
 
-                // create and add employee
-                taskManager.addEmployee(new model.Employee(id, name));
+                taskManager.addEmployee(id, name);
 
-                // save data
-                serializationManager.saveData(taskManager);
-
-                // refresh display
                 refreshEmployeesDisplay(displayArea);
                 refreshEmployeeCombo(employeeCombo);
 
-                // clear fields
                 idField.setText("");
                 nameField.setText("");
 
@@ -104,7 +97,6 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // initial load
         refreshEmployeesDisplay(displayArea);
         refreshEmployeeCombo(employeeCombo);
 
@@ -117,18 +109,18 @@ public class MainFrame extends JFrame {
     private void refreshEmployeesDisplay(JTextArea displayArea) {
         StringBuilder sb = new StringBuilder();
         for (model.Employee employee : taskManager.getTaskManager().keySet()) {
-            sb.append(employee.toString()).append("\n");
+            sb.append(employee).append("\n");
         }
         displayArea.setText(sb.toString());
     }
 
     private JPanel createTasksPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        // Input form
-        JPanel formPanel = new JPanel(new GridLayout(6, 2, 10, 10));
+
+        JPanel formPanel = new JPanel(new GridLayout(7, 2, 10, 10));
 
         JTextField idField = new JTextField();
-        JTextField statusField = new JTextField(); // Completed / Uncompleted
+        JTextField statusField = new JTextField();
         JTextField startField = new JTextField();
         JTextField endField = new JTextField();
 
@@ -150,12 +142,21 @@ public class MainFrame extends JFrame {
         formPanel.add(addSimpleButton);
         formPanel.add(addComplexButton);
 
-        // Display area
+        DefaultListModel<Task> subtasksModel = new DefaultListModel<>();
+        JList<Task> subtasksList = new JList<>(subtasksModel);
+        subtasksList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+
+        JPanel subtaskPanel = new JPanel(new BorderLayout());
+        subtaskPanel.add(new JLabel("Select subtasks for Complex Task:"), BorderLayout.NORTH);
+        subtaskPanel.add(new JScrollPane(subtasksList), BorderLayout.CENTER);
+
         JTextArea displayArea = new JTextArea();
         displayArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(displayArea);
 
-        // Simple task logic
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollPane, subtaskPanel);
+        splitPane.setResizeWeight(0.7);
+
         addSimpleButton.addActionListener(e -> {
             try {
                 int id = Integer.parseInt(idField.getText().trim());
@@ -163,55 +164,83 @@ public class MainFrame extends JFrame {
                 int start = Integer.parseInt(startField.getText().trim());
                 int end = Integer.parseInt(endField.getText().trim());
 
-                model.SimpleTask task = new model.SimpleTask(id, status, start, end);
-                taskManager.addAvailableTask(task);
-                serializationManager.saveData(taskManager);
+                taskManager.addSimpleTask(id, status, start, end);
+
                 refreshTasksDisplay(displayArea);
                 refreshTaskCombo(taskCombo);
-                clearTaskFields(idField, statusField, startField, endField);
-                JOptionPane.showMessageDialog(this, "Simple task added!");
+                refreshSubtasksList(subtasksModel);
 
+                clearTaskFields(idField, statusField, startField, endField);
+
+                JOptionPane.showMessageDialog(this, "Simple task added!");
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
 
-        // Complex task logic
         addComplexButton.addActionListener(e -> {
             try {
                 int id = Integer.parseInt(idField.getText().trim());
                 String status = statusField.getText().trim();
-                model.ComplexTask task = new model.ComplexTask(id, status);
-                taskManager.addAvailableTask(task);
-                serializationManager.saveData(taskManager);
+
+                List<Task> selectedSubtasks = subtasksList.getSelectedValuesList();
+                taskManager.addComplexTask(id, status, selectedSubtasks);
+
                 refreshTasksDisplay(displayArea);
                 refreshTaskCombo(taskCombo);
+                refreshSubtasksList(subtasksModel);
+
                 clearTaskFields(idField, statusField, startField, endField);
-                JOptionPane.showMessageDialog(this, "Complex task added!");
+                subtasksList.clearSelection();
+
+                JOptionPane.showMessageDialog(this, "Complex task added successfully!");
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
 
-        // initial display
         refreshTasksDisplay(displayArea);
+        refreshSubtasksList(subtasksModel);
 
         panel.add(formPanel, BorderLayout.NORTH);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        panel.add(splitPane, BorderLayout.CENTER);
 
         return panel;
     }
 
+    private void refreshSubtasksList(DefaultListModel<Task> model) {
+        model.clear();
+        for (Task task : taskManager.getAvailableTasks()) {
+            model.addElement(task);
+        }
+    }
+
     private void refreshTasksDisplay(JTextArea displayArea) {
         StringBuilder sb = new StringBuilder();
-        for (model.Task task : taskManager.getAvailableTasks()) {
-            sb.append("ID: ").append(task.getIdTask())
-                    .append(" | Status: ").append(task.getStatusTask())
-                    .append(" | Duration: ").append(task.estimateDuration())
-                    .append("\n");
+
+        for (Task task : taskManager.getAvailableTasks()) {
+            appendTaskDetails(sb, task, 0);
+            sb.append("\n");
         }
 
         displayArea.setText(sb.toString());
+    }
+
+    private void appendTaskDetails(StringBuilder sb, Task task, int level) {
+        String indent = "  ".repeat(level);
+
+        sb.append(indent)
+                .append("ID: ").append(task.getIdTask())
+                .append(" | Type: ").append(task instanceof ComplexTask ? "Complex" : "Simple")
+                .append(" | Status: ").append(task.getStatusTask())
+                .append(" | Duration: ").append(task.estimateDuration())
+                .append("\n");
+
+        if (task instanceof ComplexTask complexTask) {
+            for (Task subtask : complexTask.getTasks()) {
+                appendTaskDetails(sb, subtask, level + 1);
+            }
+        }
     }
 
     private void clearTaskFields(JTextField id, JTextField status, JTextField start, JTextField end) {
@@ -222,10 +251,8 @@ public class MainFrame extends JFrame {
     }
 
     private JPanel createAssignmentPanel() {
-
         JPanel panel = new JPanel(new BorderLayout());
 
-        // Top: controls
         JPanel controlPanel = new JPanel(new GridLayout(4, 2, 10, 10));
 
         employeeCombo = new JComboBox<>();
@@ -243,16 +270,13 @@ public class MainFrame extends JFrame {
         controlPanel.add(assignButton);
         controlPanel.add(modifyStatusButton);
 
-        // Center: display
         JTextArea displayArea = new JTextArea();
         displayArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(displayArea);
 
-        // Load initial data
         refreshEmployeeCombo(employeeCombo);
         refreshTaskCombo(taskCombo);
 
-        // Assign task
         assignButton.addActionListener(e -> {
             try {
                 model.Employee employee = (model.Employee) employeeCombo.getSelectedItem();
@@ -262,17 +286,16 @@ public class MainFrame extends JFrame {
                     throw new IllegalArgumentException("Select both employee and task.");
                 }
 
-                taskManager.assignTaskToEmployee(employee.getIdEmployee(), task);
-                serializationManager.saveData(taskManager);
+                taskManager.assignTaskToEmployeeAndSave(employee.getIdEmployee(), task);
                 refreshTaskCombo(taskCombo);
                 refreshEmployeeTasksDisplay(displayArea, employee);
+
                 JOptionPane.showMessageDialog(this, "Task assigned successfully!");
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
 
-        // Modify status
         modifyStatusButton.addActionListener(e -> {
             try {
                 model.Employee employee = (model.Employee) employeeCombo.getSelectedItem();
@@ -281,21 +304,27 @@ public class MainFrame extends JFrame {
                     throw new IllegalArgumentException("Select an employee.");
                 }
 
-                String input = JOptionPane.showInputDialog(this, "Enter Task ID:");
+                refreshEmployeeTasksDisplay(displayArea, employee);
 
-                if (input == null || input.isBlank()) return;
+                String input = JOptionPane.showInputDialog(
+                        this,
+                        "The selected employee's tasks are now displayed.\nEnter the Task ID to toggle its status:"
+                );
+
+                if (input == null || input.isBlank()) {
+                    return;
+                }
 
                 int taskId = Integer.parseInt(input);
-                taskManager.modifyTaskStatus(employee.getIdEmployee(), taskId);
-                serializationManager.saveData(taskManager);
+                taskManager.modifyTaskStatusAndSave(employee.getIdEmployee(), taskId);
                 refreshEmployeeTasksDisplay(displayArea, employee);
+
                 JOptionPane.showMessageDialog(this, "Task status updated!");
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
 
-        // When employee changes
         employeeCombo.addActionListener(e -> {
             model.Employee employee = (model.Employee) employeeCombo.getSelectedItem();
             if (employee != null) {
@@ -311,37 +340,64 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
-    // Populate employees
     private void refreshEmployeeCombo(JComboBox<model.Employee> combo) {
-        if (combo == null) return;
+        if (combo == null) {
+            return;
+        }
 
         combo.removeAllItems();
-        for (model.Employee e : taskManager.getTaskManager().keySet()) {
-            combo.addItem(e);
+        for (model.Employee employee : taskManager.getTaskManager().keySet()) {
+            combo.addItem(employee);
         }
     }
 
-    // Populate tasks
     private void refreshTaskCombo(JComboBox<model.Task> combo) {
-        if (combo == null) return;
+        if (combo == null) {
+            return;
+        }
 
         combo.removeAllItems();
-        for (model.Task t : taskManager.getAvailableTasks()) {
-            combo.addItem(t);
+        for (model.Task task : taskManager.getAvailableTasks()) {
+            combo.addItem(task);
         }
     }
 
-    // Display employee tasks
     private void refreshEmployeeTasksDisplay(JTextArea area, model.Employee employee) {
         StringBuilder sb = new StringBuilder();
         sb.append("Tasks for ").append(employee.getName()).append(":\n\n");
+        sb.append("Only top-level assigned task IDs can be toggled.\n");
+        sb.append("Subtasks shown below are part of a complex task and cannot be toggled separately.\n\n");
+
         for (model.Task task : taskManager.getEmployeeTasks(employee.getIdEmployee())) {
-            sb.append("ID: ").append(task.getIdTask())
-                    .append(" | Status: ").append(task.getStatusTask())
-                    .append(" | Duration: ").append(task.estimateDuration())
-                    .append("\n");
+            appendEmployeeTaskDetails(sb, task, 0, true);
+            sb.append("\n");
         }
+
         area.setText(sb.toString());
+    }
+
+    private void appendEmployeeTaskDetails(StringBuilder sb, Task task, int level, boolean topLevel) {
+        String indent = "  ".repeat(level);
+
+        sb.append(indent)
+                .append("ID: ").append(task.getIdTask())
+                .append(" | Type: ").append(task instanceof ComplexTask ? "Complex" : "Simple")
+                .append(" | Status: ").append(task.getStatusTask())
+                .append(" | Duration: ").append(task.estimateDuration());
+
+        if (topLevel) {
+            sb.append(" | Toggleable: YES");
+        } else {
+            sb.append(" | Toggleable: NO");
+        }
+
+        sb.append("\n");
+
+        if (task instanceof ComplexTask complexTask) {
+            for (Task subtask : complexTask.getTasks()) {
+                appendEmployeeTaskDetails(sb, subtask, level + 1, false);
+            }
+        }
     }
 
     private JPanel createStatisticsPanel() {
@@ -361,7 +417,7 @@ public class MainFrame extends JFrame {
 
         over40Button.addActionListener(e -> {
             try {
-                java.util.List<String> employees = utility.findEmployeesWithOver40Hours(taskManager);
+                List<String> employees = utility.findEmployeesWithOver40Hours(taskManager);
                 StringBuilder sb = new StringBuilder();
                 sb.append("Employees with workload greater than 40 hours:\n\n");
 
@@ -372,6 +428,7 @@ public class MainFrame extends JFrame {
                         sb.append(employeeName).append("\n");
                     }
                 }
+
                 displayArea.setText(sb.toString());
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -380,7 +437,7 @@ public class MainFrame extends JFrame {
 
         statusStatsButton.addActionListener(e -> {
             try {
-                java.util.Map<String, java.util.Map<String, Integer>> statistics =
+                Map<String, Map<String, Integer>> statistics =
                         utility.computeTaskStatusStatistics(taskManager);
 
                 StringBuilder sb = new StringBuilder();
@@ -389,9 +446,9 @@ public class MainFrame extends JFrame {
                 if (statistics.isEmpty()) {
                     sb.append("No statistics available.");
                 } else {
-                    for (java.util.Map.Entry<String, java.util.Map<String, Integer>> entry : statistics.entrySet()) {
+                    for (Map.Entry<String, Map<String, Integer>> entry : statistics.entrySet()) {
                         String employeeName = entry.getKey();
-                        java.util.Map<String, Integer> employeeStats = entry.getValue();
+                        Map<String, Integer> employeeStats = entry.getValue();
 
                         sb.append(employeeName)
                                 .append(" -> Completed: ")
@@ -401,6 +458,7 @@ public class MainFrame extends JFrame {
                                 .append("\n");
                     }
                 }
+
                 displayArea.setText(sb.toString());
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
